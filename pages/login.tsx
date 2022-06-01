@@ -1,8 +1,25 @@
+import { Formik, Form, Field, ErrorMessage } from 'formik';
 import Image from 'next/image';
 import Link from 'next/link';
+import { supabase } from '../lib/initSupabase';
 import logo from '../public/logo.svg';
-
+import * as Yup from 'yup';
+import { Notifications } from '../components';
+import { useNotifier } from 'react-headless-notifier';
+import { useRouter } from 'next/router';
+const classes = {
+  form: {
+    input:
+      'mb-3 rounded-md border-transparent flex-1 appearance-none border border-gray-300 w-full py-2 px-4 bg-white text-gray-700 placeholder-gray-400 shadow-sm text-base focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-transparent',
+    inputError:
+      'outline-none ring-2 ring-rose-600 border-transparent placeholder:text-rose-400',
+    error:
+      'block -mt-2 mb-2 text-red-600 text-xs justify-start font-semibold text-left',
+  },
+};
 const Login = () => {
+  const { notify } = useNotifier();
+  const router = useRouter();
   return (
     <div className="w-full h-screen font-sans bg-cover bg-landscape">
       <div className="flex h-full mx-auto">
@@ -18,46 +35,107 @@ const Login = () => {
           </div>
         </div>
         <div className="basis-5/12 flex justify-self-start text-center">
-          <form className="max-w-2xl p-10 my-auto bg-white bg-opacity-25">
-            <p className="mb-8 text-3xl font-semibold text-center text-black">
-              Login
-            </p>
-            <div className="mb-2">
-              <div className=" relative ">
-                <input
+          <Formik
+            initialValues={{ email: '', pass: '' }}
+            validationSchema={Yup.object({
+              email: Yup.string()
+                .email('Invalid email address')
+                .required('Please enter an email address'),
+              pass: Yup.string().min(8, 'Must be 8 characters or more'),
+            })}
+            onSubmit={(values, { setSubmitting }) => {
+              const { email, pass } = values;
+              console.log({ email, pass });
+
+              supabase.auth
+                .signIn({ email, password: pass })
+                .then((data) => {
+                  console.log(data);
+                  console.log(Notifications);
+                  if (data.error) {
+                    if (data.error.message === 'Email not confirmed') {
+                      supabase.auth.signUp({ email, password: pass });
+                      notify(
+                        <Notifications
+                          title={'Login error!'}
+                          message="Please confirm your email address, a link has been sent to your email address."
+                          type="error"
+                        />,
+                        {
+                          position: 'topRight',
+                          duration: 5000,
+                        }
+                      );
+                    } else
+                      notify(
+                        <Notifications
+                          title={'Login error!'}
+                          message={data.error.message}
+                          type="error"
+                        />,
+                        {
+                          position: 'topRight',
+                          duration: 5000,
+                        }
+                      );
+                  } else {
+                    router.push('/dashboard');
+                  }
+                })
+                .catch((err) => {
+                  console.error(err);
+                  console.log({ notify });
+                });
+            }}>
+            {({ errors, touched }) => (
+              <Form className=" w-96 p-10 my-auto bg-white bg-opacity-25">
+                <p className="mb-8 text-3xl font-semibold text-center text-black">
+                  Login
+                </p>
+                <Field
+                  className={
+                    classes.form.input +
+                    (touched.email && errors.email
+                      ? classes.form.inputError
+                      : '')
+                  }
+                  name="email"
                   type="email"
-                  autoComplete="on"
-                  id="login-with-bg-email"
-                  className=" rounded-m border-transparent flex-1 appearance-none border border-gray-300 w-full py-2 px-4 bg-white text-gray-700 placeholder-gray-400 shadow-sm text-base focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-transparent"
-                  placeholder="email"
+                  placeholder="Email address"
                 />
-              </div>
-            </div>
-            <div className="mb-2">
-              <div className=" relative ">
-                <input
+                <ErrorMessage
+                  component="span"
+                  className={classes.form.error}
+                  name="email"
+                />
+                <Field
+                  className={
+                    classes.form.input +
+                    (touched.pass && errors.pass ? classes.form.inputError : '')
+                  }
+                  name="pass"
                   type="password"
-                  id="login-with-bg-password"
-                  itemType="password"
-                  className=" rounded-m border-transparent flex-1 appearance-none border border-gray-300 w-full py-2 px-4 bg-white text-gray-700 placeholder-gray-400 shadow-sm text-base focus:outline-none focus:ring-2 focus:ring-rose-600 focus:border-transparent"
-                  placeholder="password"
+                  placeholder="Password"
                 />
-              </div>
-            </div>
-            <div className="flex items-center justify-between mt-4">
-              <button
-                type="submit"
-                className="py-2 px-4 bg-rose-800 hover:bg-rose-500 focus:ring-rose-500 focus:ring-offset-indigo-200 text-white w-full transition ease-in duration-200 text-center text-base font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2  rounded-lg ">
-                Login
-              </button>
-            </div>
-            <div className="text-center font-sans right-0 mt-2 inline-block text-sm align-baseline font-medium">
-              Don’t have an account?{' '}
-              <Link href="/signup">
-                <a className="text-rose-600 hover:text-rose-800">Sign up</a>
-              </Link>
-            </div>
-          </form>
+                <ErrorMessage
+                  component="span"
+                  className={classes.form.error}
+                  name="pass"
+                />
+                <button
+                  className="mt-2 block py-2 px-4 bg-rose-800 hover:bg-rose-500 focus:ring-rose-500 focus:ring-offset-rose-200 text-white w-1/2 mx-auto transition ease-in duration-200 text-center text-base font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2  rounded-md "
+                  type="submit">
+                  Login
+                </button>
+                <div className="text-center font-sans right-0 mt-2 inline-block text-sm align-baseline font-medium">
+                  Don’t have an account?{' '}
+                  <Link href="/signup">
+                    <a className="text-rose-600 hover:text-rose-800">Signup</a>
+                  </Link>
+                </div>
+              </Form>
+            )}
+          </Formik>
         </div>
       </div>
     </div>
